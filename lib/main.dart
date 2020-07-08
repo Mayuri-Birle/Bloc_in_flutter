@@ -1,106 +1,147 @@
-import 'package:bloc_in_flutter/counter_bloc.dart';
-import 'package:bloc_in_flutter/counter_event.dart';
+import 'package:bloc_in_flutter/bloc/weather_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import 'counter_state.dart';
+import 'bloc/bloc.dart';
+import 'bloc/weather_bloc.dart';
+import 'model/weather.dart';
 
-void main() {
-  runApp(MyApp());
-}
+void main() => runApp(MyApp());
 
 class MyApp extends StatelessWidget {
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Flutter Demo',
       theme: ThemeData(
-        visualDensity: VisualDensity.adaptivePlatformDensity,
+        primarySwatch: Colors.blue,
       ),
-      home: MyHomePage(title: 'Flutter Demo Home Page'),
+      home: WeatherPage(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  MyHomePage({Key key, this.title}) : super(key: key);
+class WeatherPage extends StatefulWidget {
+  WeatherPage({Key key}) : super(key: key);
 
-  final String title;
-
-  @override
-  _MyHomePageState createState() => _MyHomePageState();
+  _WeatherPageState createState() => _WeatherPageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  final _counterBloc = CounterBloc();
-
-  @override
-  Widget build(BuildContext context) {
-    return BlocProvider(
-      bloc: _counterBloc,
-      child: CounterWidget(widget: widget),
-    );
-  }
-
-  @override
-  void dispose() {
-    _counterBloc.dispose();
-    super.dispose();
-  }
-}
-
-class CounterWidget extends StatelessWidget {
-  const CounterWidget({
-    Key key,
-    @required this.widget,
-  }) : super(key: key);
-
-  final MyHomePage widget;
+class _WeatherPageState extends State<WeatherPage> {
+  // Instantiate the Bloc
+  final weatherBloc = WeatherBloc();
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.title),
+        title: Text('Fake Weather App'),
       ),
-      body: BlocBuilder(
-        bloc: BlocProvider.of<CounterBloc>(context),
-        builder: (context, CounterState state) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                Text(
-                  'You have pushed the button this many times:',
-                ),
-                Text(
-                  '${BlocProvider.of<CounterBloc>(context).state}',
-                  style: Theme.of(context).textTheme.headline4,
-                ),
-              ],
+      body: BlocProvider(
+        bloc: weatherBloc,
+        child: Container(
+          padding: EdgeInsets.symmetric(vertical: 16),
+          alignment: Alignment.center,
+          // BlocBuilder invokes the builder when new state is emitted.
+          child: BlocListener(
+            bloc: weatherBloc,
+            listener: (context, WeatherState state) {
+              if (state is WeatherLoaded) {
+                print('Loaded: ${state.weather.cityName}');
+              }
+            },
+            child: BlocBuilder(
+              bloc: weatherBloc,
+              // The builder function has to be a "pure function".
+              // That is, it only returns a Widget and doesn't do anything else.
+              builder: (BuildContext context, WeatherState state) {
+                // Changing the UI based on the current state
+                if (state is WeatherInitial) {
+                  return buildInitialInput();
+                } else if (state is WeatherLoading) {
+                  return buildLoading();
+                } else if (state is WeatherLoaded) {
+                  return buildColumnWithData(state.weather);
+                }
+              },
             ),
-          );
-        },
+          ),
+        ),
       ),
-      floatingActionButton: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: <Widget>[
-          FloatingActionButton(
-            onPressed: () =>
-                BlocProvider.of<CounterBloc>(context).onIncrement(),
-            tooltip: 'Increment',
-            child: Icon(Icons.add),
-          ),
-          SizedBox(width: 10),
-          FloatingActionButton(
-            onPressed: () =>
-                BlocProvider.of<CounterBloc>(context).onDecrement(),
-            tooltip: 'Decrement',
-            child: Icon(Icons.remove),
-          ),
-        ],
-      ), // This trailing comma makes auto-formatting nicer for build methods.
     );
+  }
+
+  Widget buildInitialInput() {
+    return Center(
+      child: CityInputField(),
+    );
+  }
+
+  Widget buildLoading() {
+    return Center(
+      child: CircularProgressIndicator(),
+    );
+  }
+
+  // Builds widgets from the starter UI with custom weather data
+  Column buildColumnWithData(Weather weather) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: <Widget>[
+        Text(
+          weather.cityName,
+          style: TextStyle(
+            fontSize: 40,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        Text(
+          // Display the temperature with 1 decimal place
+          "${weather.temperature.toStringAsFixed(1)} °C",
+          style: TextStyle(fontSize: 80),
+        ),
+        CityInputField(),
+      ],
+    );
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+    // Don't forget to call dispose on the Bloc to close the Streams!
+    weatherBloc.dispose();
+  }
+}
+
+class CityInputField extends StatefulWidget {
+  const CityInputField({
+    Key key,
+  }) : super(key: key);
+
+  @override
+  _CityInputFieldState createState() => _CityInputFieldState();
+}
+
+class _CityInputFieldState extends State<CityInputField> {
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 50),
+      child: TextField(
+        onSubmitted: submitCityName,
+        textInputAction: TextInputAction.search,
+        decoration: InputDecoration(
+          hintText: "Enter a city",
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          suffixIcon: Icon(Icons.search),
+        ),
+      ),
+    );
+  }
+
+  void submitCityName(String cityName) {
+    // We will use the city name to search for the fake forecast
+    final weatherBloc = BlocProvider.of<WeatherBloc>(context);
+    weatherBloc.dispatch(GetWeather(cityName));
   }
 }
